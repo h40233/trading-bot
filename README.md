@@ -1,3 +1,4 @@
+https://github.com/h40233/trading-bot.git
 ```
 專案
 |-- main.py 實盤執行的主程式
