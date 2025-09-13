@@ -1,0 +1,28 @@
+# --- Binance 官方交易 SDK (USDⓈ-M Futures) ---
+binance-sdk-derivatives-trading-usds-futures==1.5.0
+
+# --- 深度學習 & 時序 ---
+torch==2.8.0
+pytorch-forecasting==1.4.0
+
+# --- 實驗管理 ---
+mlflow==3.3.2
+optuna==3.6.1   # 這是比較常見穩定版（你可以確認最新）
+
+# --- 回測 ---
+backtesting==0.6.5  # 若版本衝突可查看 PyPI 最新
+
+# --- 技術指標 ---
+TA-Lib==0.4.28  # 若安裝出問題看平台是否支援
+
+# --- 通知 (Telegram) ---
+python-telegram-bot==22.3
+
+# --- 工具類 ---
+numpy==1.26.4
+pandas==2.3.2
+scikit-learn==1.7.2
+matplotlib==3.7.2
+tqdm==4.65.0
+python-dotenv==1.0.0
+schedule==1.2.0
