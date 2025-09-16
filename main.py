@@ -26,5 +26,5 @@ config_api=ConfigurationRestAPI(
             )
 client = DerivativesTradingUsdsFutures(config_rest_api=config_api).rest_api
 
-df = get_kline_data(client, config["symbol"], config["timeframe"], start_time, end_time, config["use_mark_price_kline"])
+df = get_kline_data(client, config["symbol"], config["timeframe"], start_time, end_time, config["use_mark_price_kline"],config["fetch_limit"])
 kline_to_csv(df)

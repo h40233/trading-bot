@@ -10,6 +10,7 @@
     "retry_wait" : 10,
     "retry_count" : 3,
     "use_mark_price_kline" : true,
+    "fetch_limit" : 100,
 
     "下單設定" : "",
     "order_mode" : "percent",
@@ -23,7 +24,7 @@
 
     "回測設定" : "",
     "start_time" : "2020-01-01 00:00",
-    "end_time" : "2024-12-31 00:00",
+    "end_time" : "2020-12-31 00:00",
     "fee_rate" : 0.001,
     "slippage" : 0.0005
 }
