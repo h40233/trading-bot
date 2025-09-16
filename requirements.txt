@@ -13,16 +13,11 @@ optuna==3.6.1   # 這是比較常見穩定版（你可以確認最新）
 backtesting==0.6.5  # 若版本衝突可查看 PyPI 最新
 
 # --- 技術指標 ---
-TA-Lib==0.4.28  # 若安裝出問題看平台是否支援
+pandas_ta==0.4.71b0
 
 # --- 通知 (Telegram) ---
 python-telegram-bot==22.3
 
 # --- 工具類 ---
-numpy==1.26.4
-pandas==2.3.2
-scikit-learn==1.7.2
-matplotlib==3.7.2
-tqdm==4.65.0
 python-dotenv==1.0.0
 schedule==1.2.0
