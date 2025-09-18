@@ -1,16 +1,16 @@
 {
     "基本設定" : "",
-    "testnet" : true,
+    "testnet" : false,
     "testnet_url" : "https://testnet.binancefuture.com",
     "symbol" : "BTCUSDT",
     "timeframe" : "5m",
-    "strategy" : "ema+RSI",
+    "strategy" : "ema_RSI",
     "max_hold" : 10,
-    "sleep_time" : 1,
+    "sleep_time" : 0.3,
     "retry_wait" : 10,
     "retry_count" : 3,
     "use_mark_price_kline" : true,
-    "fetch_limit" : 100,
+    "fetch_limit" : 500,
 
     "下單設定" : "",
     "order_mode" : "percent",
@@ -23,8 +23,8 @@
     "SL_value" : 10,
 
     "回測設定" : "",
-    "start_time" : "2020-01-01 00:00",
-    "end_time" : "2020-12-31 00:00",
+    "start_time" : "2023-01-01 00:00",
+    "end_time" : "2024-12-31 00:00",
     "fee_rate" : 0.001,
     "slippage" : 0.0005
 }

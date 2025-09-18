@@ -1,14 +1,15 @@
 from binance_sdk_derivatives_trading_usds_futures.derivatives_trading_usds_futures import (DerivativesTradingUsdsFutures,ConfigurationRestAPI,DERIVATIVES_TRADING_USDS_FUTURES_REST_API_PROD_URL)
 import logging
-import json
 from util import *
 
 #logging設定
 logging.basicConfig(level=logging.INFO)
 
 #抓config
-with open("config.json", "r", encoding="utf-8") as f:
-    config = json.load(f)
+config = load_config()
+
+#載入策略
+strategy = load_strategy(config["strategy"])
 
 #設定datetime
 start_time = to_timestamp(config["start_time"])
@@ -26,5 +27,9 @@ config_api=ConfigurationRestAPI(
             )
 client = DerivativesTradingUsdsFutures(config_rest_api=config_api).rest_api
 
-df = get_kline_data(client, config["symbol"], config["timeframe"], start_time, end_time, config["use_mark_price_kline"],config["fetch_limit"])
-kline_to_csv(df)
+#抓K線
+df, needsave = get_kline_data(client, config["symbol"], config["timeframe"], start_time, end_time, config["use_mark_price_kline"],config["fetch_limit"])
+if needsave:
+    to_csv(df,is_raw = True)
+out = strategy.generate_signal(df)
+to_csv(out, is_raw = False)
