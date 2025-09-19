@@ -4,7 +4,7 @@
     "testnet_url" : "https://testnet.binancefuture.com",
     "symbol" : "BTCUSDT",
     "timeframe" : "5m",
-    "strategy" : "ema_RSI",
+    "strategy" : "EMA_RSI",
     "max_hold" : 10,
     "sleep_time" : 0.3,
     "retry_wait" : 10,

@@ -28,7 +28,7 @@ config_api=ConfigurationRestAPI(
 client = DerivativesTradingUsdsFutures(config_rest_api=config_api).rest_api
 
 #抓K線
-df, needsave = get_kline_data(client, config["symbol"], config["timeframe"], start_time, end_time, config["use_mark_price_kline"],config["fetch_limit"])
+df, needsave = get_kline_data(client, config["symbol"], config["timeframe"], start_time, end_time, config["use_mark_price_kline"],config["fetch_limit"],config["sleep_time"])
 if needsave:
     to_csv(df,is_raw = True)
 out = strategy.generate_signal(df)

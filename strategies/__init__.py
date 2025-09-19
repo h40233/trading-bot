@@ -1,5 +1,7 @@
 from typing import Type, Dict
 from .strategy import strategy
+from pathlib import Path
+import pkgutil, importlib
 
 
 # 全域註冊表
@@ -16,3 +18,10 @@ def register_strategy(name:str):
         STRATEGY_REGISTRY[name] = cls
         return cls
     return decorator
+
+
+# 👇 自動掃描 strategies 資料夾並 import
+package_dir = Path(__file__).resolve().parent
+for _, module_name, _ in pkgutil.iter_modules([str(package_dir)]):
+    if module_name not in ("strategy", "__init__"):  # 避免重複載入基底類
+        importlib.import_module(f"{__name__}.{module_name}")

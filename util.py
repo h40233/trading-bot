@@ -7,7 +7,6 @@ import re
 import time
 import json
 from strategies import STRATEGY_REGISTRY
-import tqdm
 
 logging.basicConfig(level=logging.INFO)
 
@@ -32,10 +31,10 @@ def get_kline_data(client :DerivativesTradingUsdsFuturesRestAPI,
                     start_time:int = None,
                     end_time:int = None,
                     mark_price:bool = False,
-                    limit:int = None
+                    limit:int = None,
+                    rate_limit:float = 0.3
                     ):
     """抓K線資料回傳pandas dataframe"""
-    config = load_config()
     start_datetime = pd.to_datetime(start_time,unit="ms",utc=True)
     end_datetime = pd.to_datetime(end_time,unit="ms",utc=True)
     start_datetime = start_datetime.tz_convert("Asia/Taipei").strftime("%Y-%m-%d %H-%M")
@@ -51,10 +50,7 @@ def get_kline_data(client :DerivativesTradingUsdsFuturesRestAPI,
     else:
         logging.info("尚未抓取過此段K線資料，開始抓取")
         df = []
-        count = 0
         next_start_time = start_time
-        total = end_time - start_time
-        pbar = tqdm(total, desc = "抓取進度")
         while True:
             try:
                 if mark_price:
@@ -74,18 +70,15 @@ def get_kline_data(client :DerivativesTradingUsdsFuturesRestAPI,
                                                             limit = limit
                                                             ).data()
                 df.extend(kline)
+                process = (next_start_time - start_time) / (end_time - start_time)
+                print(f"抓取進度{process:.2%}",end="\r",flush=True)
                 next_start_time = df[-1][0]+1
                 if next_start_time >= end_time:
                     break
-                
-                count += 1
-                logging.info(f"start_time = {pd.to_datetime(next_start_time, unit="ms",utc=True).tz_convert("Asia/Taipei").strftime("%Y-%m-%d %H:%M")}\nend_time = {pd.to_datetime(end_time, unit="ms",utc=True).tz_convert("Asia/Taipei").strftime("%Y-%m-%d %H:%M")}\n已迴圈{count}次")
-                pbar.update(next_start_time - start_time - pbar.n)
-                time.sleep(config["sleep_time"])
+                time.sleep(rate_limit)
             except Exception as e:
-                raise f"出現錯誤 {e}"
-        
-        pbar.close()
+                raise f"發生錯誤{e}"
+        print("抓取完成")    
 
         columns = ["open_time", "open", "high", "low", "close", "ignore", "close_time", "ignore","ignore","ignore","ignore","ignore"]
         df = pd.DataFrame(df, columns = columns)
@@ -104,7 +97,7 @@ def to_csv(df, is_raw):
         filename = f"{df.loc[0,"symbol"]}_{df.loc[0,"open_time"]} to {df.iloc[-1]["open_time"]}"
     else:
         pathdir = "data/processed"
-        filename = f"{df.loc[0,"symbol"]}_{df.loc[0, "strategy"]}_{df.loc[0,"open_time"]} to {df.iloc[-1]["open_time"]}"
+        filename = f"{df.loc[0,"symbol"]}_{df.loc[0, "strategy_name"]}_{df.loc[0,"open_time"]} to {df.iloc[-1]["open_time"]}"
     filename = re.sub(":", "-", filename)
 
     os.makedirs(pathdir, exist_ok=True)
@@ -118,4 +111,7 @@ def load_strategy(strategy_name:str):
     if strategy_name not in STRATEGY_REGISTRY:
         raise ValueError("找不到策略{strategy_name}")
     strategy = STRATEGY_REGISTRY[strategy_name]
-    return strategy
+    s = strategy()
+    logging.info(f"載入策略{s.name}成功")
+    return s
+
