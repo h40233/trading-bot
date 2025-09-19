@@ -24,3 +24,4 @@ https://github.com/h40233/trading-bot.git
 量化交易練習
 2025.09.13 第一次上傳git
 2025.09.16 可以抓取K線資料
+2025.09.20 可以動態載入策略，並將帶有signal的df存成csv
