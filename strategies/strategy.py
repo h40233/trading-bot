@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-import pandas as pd
 
 class strategy(ABC):
     """所有策略必須繼承這個父類別，保證方法一致"""

@@ -22,7 +22,8 @@ class ema_RSI(strategy):
         df["ema"] = ema
         df["rsi"] = rsi
         df["signal"] = 0
-        df.loc[ (df["close"] > df["ema"]) & (df["rsi"] < self.lower), "signal" ] = 1
-        df.loc[ (df["close"] < df["ema"]) & (df["rsi"] > self.upper), "signal" ] = -1
+        df.loc[ (df["close"] > df["ema"]) & (df["rsi"] > self.upper), "signal" ] = 1
+        df.loc[ (df["close"] < df["ema"]) & (df["rsi"] < self.lower), "signal" ] = -1
+        df.loc[ (df["signal"])]
         df["strategy_name"] = self.name
         return df

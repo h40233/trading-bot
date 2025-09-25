@@ -91,7 +91,7 @@ def get_kline_data(client :DerivativesTradingUsdsFuturesRestAPI,
         needsave = True
         return df, needsave
 
-def to_csv(df, is_raw):
+def data_to_csv(df, is_raw):
     if is_raw:
         pathdir = "data/raw"
         filename = f"{df.loc[0,"symbol"]}_{df.loc[0,"open_time"]} to {df.iloc[-1]["open_time"]}"
@@ -99,11 +99,22 @@ def to_csv(df, is_raw):
         pathdir = "data/processed"
         filename = f"{df.loc[0,"symbol"]}_{df.loc[0, "strategy_name"]}_{df.loc[0,"open_time"]} to {df.iloc[-1]["open_time"]}"
     filename = re.sub(":", "-", filename)
+    to_csv(df, pathdir, filename)
 
+def to_csv(df, pathdir , filename):
     os.makedirs(pathdir, exist_ok=True)
     path = f"{pathdir}/{filename}.csv"
     df.to_csv(path, index=False, encoding="utf-8-sig")
     logging.info(f"已儲存檔案到{pathdir}/")
+
+def result_to_csv(df, is_backtest):
+    if is_backtest:
+        pathdir = "result/backtests"
+    else:
+        pathdir = "result/logs"
+    filename = f"{df.loc[0,"symbol"]}_{df.loc[0, "strategy_name"]}_{df.loc[0,"open_time"]} to {df.iloc[-1]["open_time"]}"
+    filename = re.sub(":", "-", filename)
+    to_csv(df, pathdir, filename)
 
 def load_strategy(strategy_name:str):
     #載入策略
@@ -115,3 +126,11 @@ def load_strategy(strategy_name:str):
     logging.info(f"載入策略{s.name}成功")
     return s
 
+def get_processed_data(filename:str):
+        pathdir = "data/processed/"
+        path = pathdir + filename
+        if os.path.lexists(path):
+            logging.info("正在調用策略訊號")
+            return pd.read_csv(path)
+        else:
+            raise ValueError(f"{filename}不存在，請先使用策略取得訊號資料")
