@@ -15,6 +15,8 @@
     "下單設定" : "",
     "order_mode" : "percent",
     "order_value" : 10,
+    "pyramiding" : false,
+    "reverse" : false,
 
     "止盈止損設定" : "",
     "tp_of_percent" : true,
