@@ -17,12 +17,13 @@
     "order_value" : 10,
     "pyramiding" : false,
     "reverse" : false,
+    "leverage" : 3,
 
     "止盈止損設定" : "",
     "tp_of_percent" : true,
     "tp_value" : 10,
     "sl_of_percent" : true,
-    "sl_value" : 10,
+    "sl_value" : 5,
 
     "回測設定" : "",
     "start_time" : "2023-01-01 00:00",

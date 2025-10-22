@@ -40,7 +40,7 @@ class backtest:
         else:
             raise ValueError("order_mode只能是 percent, price, fixed 其中一種")
         
-        pnl, open_log=self.position.open(close, size, tp, sl)
+        pnl, open_log=self.position.open(close, size*config["leverage"], tp, sl)
         self.stats.trade_log(pnl, open_log)
 
     def sell(self, close):
@@ -63,38 +63,28 @@ class backtest:
         else:
             raise ValueError("order_mode只能是 percent, price, fixed 其中一種")
         
-        pnl, open_log=self.position.open(close, size, tp, sl)
+        pnl, open_log=self.position.open(close, size*config["leverage"], tp, sl)
         self.stats.trade_log(pnl, open_log)
-    
-    def close(self, close):
-        pnl, close_log = self.position.close_all(close)
-        self.stats.trade_log(pnl, close_log)
 
     def show(self):
         pass
+
     def run(self):
         for i in tqdm(range(len(self.df))):
             if self.stats.cash <= 0:
-                logging.warning("資金不足，無法繼續交易")
+                logging.info("資金不足，無法繼續交易")
                 break
             row = self.df.iloc[i]
+            if self.position.size != 0:
+                pnl, close_log = self.position.trigger_SL(row["close"])
+                self.stats.trade_log(pnl, close_log)
+                pnl, tp_log = self.position.trigger_TP(row["close"])
+                self.stats.trade_log(pnl, tp_log)
             if row["signal"] == 1:
-                if self.position.size > 0 and not config["pyramiding"]:
-                    self.close(row["close"])
-                    continue
-                if self.position.size < 0 and not config["reverse"]:
-                    continue
-                else:
-                    self.buy(row["close"])
-                    continue
+                self.buy(row["close"])
+                continue
             elif row["signal"] == -1:
-                if self.position.size < 0 and not config["pyramiding"]:
-                    self.close(row["close"])
-                    continue
-                if self.position.size > 0 and not config["reverse"]:
-                    continue
-                else:
-                    self.sell(row["close"])
+                self.sell(row["close"])
         if self.position.size != 0:
             pnl, close = self.position.close_all(self.df.iloc[-1]["close"])
             self.stats.trade_log(pnl, close)
@@ -128,17 +118,17 @@ class position:
         
         if self.size != 0:
             if self.size * size < 0 :
-                if abs(size) > abs(self.size):
-                    #允許反手就反手，否則甚麼都不做進入下一根K棒
+                # if abs(size) > abs(self.size):
+                    #允許反手就反手，否則甚麼都不做
                     if config["reverse"]:
                         pnl, log = self.reverse(price, size, tp, sl)
                         return pnl, log
                     else:
                         return None, None
-                else:
-                    #如果開反方向的小倉位->平一部分倉位
-                    pnl, log = self.close(price, -size)
-                    return pnl, log
+                # else:
+                #     #如果開反方向的小倉位->平一部分倉位
+                #     pnl, log = self.close(price, -size)
+                #     return pnl, log
             else:
                 #如果能同方向加倉就加，否則甚麼都不做進入下一根K棒
                 if not config["pyramiding"]:
@@ -164,8 +154,8 @@ class position:
         self.size -= size
         if self.size == 0:
             self.avg_price = 0
-        columns = ["交易序號", "狀態","出場價","實現損益", "剩餘倉位"]
-        log = [self.index, "平倉", price, pnl, self.size]
+        columns = ["交易序號", "狀態","出場價","出場量","實現損益", "剩餘倉位"]
+        log = [self.index, "平倉", price,size, pnl, self.size]
         log = pd.DataFrame([log], columns=columns)
         self.index += 1
         return pnl, log
@@ -174,6 +164,8 @@ class position:
                 price:float
                 )->tuple[float,pd.DataFrame]:
         """全部平倉"""
+        self.sl = None
+        self.tp = None
         return self.close(price, self.size)
 
     def reverse(self,
@@ -188,11 +180,21 @@ class position:
         log = pd.concat([log_close, log_open], ignore_index=True)
         return pnl_close+pnl_open, log
     
-    def trigger_SL(self)->bool:
-        pass
-
-    def trigger_TP(self)->bool:
-        pass
+    def trigger_SL(self,
+                   close
+                   ):
+            if self.sl is not None:
+                if ((close <= self.sl) and (self.size > 0)) or ((close >= self.sl) and (self.size < 0)):
+                    return self.close_all(self.sl)
+            return None, None
+    
+    def trigger_TP(self,
+                   close
+                   )->bool:
+        if self.tp is not None:
+            if ((close >= self.tp) and (self.size > 0)) or ((close <= self.tp) and (self.size < 0)):
+                return self.close_all(self.tp)
+        return None, None
 
 class stats:
     """只負責記錄資料的動作"""
@@ -201,7 +203,9 @@ class stats:
                 ):
         self.count = 0
         self.count_long = 0
+        self.count_long_win = 0
         self.count_short = 0
+        self.count_short_win = 0
         self.log=pd.DataFrame()
         self.cash = cash
         self.pnl = 0
@@ -222,20 +226,30 @@ class stats:
                 side = log["多/空"].iloc[-1]
                 if side == 1:
                     self.count_long += 1
+                    if pnl > 0:
+                        self.count_long_win += 1
                 else:
                     self.count_short += 1
+                    if pnl > 0:
+                        self.count_short_win += 1
 
-    def shape():
+    def sharpe():
         pass
 
     def long_winrate(self):
-        pass
+        if self.count_long == 0:
+            return 0
+        return self.count_long_win / self.count_long * 100
 
     def short_winrate(self):
-        pass
+        if self.count_short == 0:
+            return 0
+        return self.count_short_win / self.count_short * 100
 
     def winrate(self):
-        pass
+        if self.count == 0:
+            return 0
+        return (self.count_long_win + self.count_short_win) / self.count * 100
 
 if __name__ == "__main__":
     bt = backtest(df)
