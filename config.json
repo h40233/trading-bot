@@ -1,6 +1,6 @@
 {
     "基本設定": {
-        "testnet": false,
+        "testnet": true,
         "testnet_url": "https://testnet.binancefuture.com",
         "symbol": "BTCUSDT",
         "timeframe": "5m",
