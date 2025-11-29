@@ -1,6 +1,9 @@
 # --- Binance 官方交易 SDK (USDⓈ-M Futures) ---
 binance-sdk-derivatives-trading-usds-futures==1.5.0
 
+# --- 數據分析與繪圖 ---
+matplotlib==3.8.4 # 或最新穩定版
+
 # --- 深度學習 & 時序 ---
 torch==2.8.0
 pytorch-forecasting==1.4.0
@@ -21,3 +24,7 @@ python-telegram-bot==22.3
 # --- 工具類 ---
 python-dotenv==1.0.0
 schedule==1.2.0
+
+# --- 測試框架 ---
+pytest
+pytest-mock

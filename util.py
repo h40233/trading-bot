@@ -77,7 +77,8 @@ def get_kline_data(client :DerivativesTradingUsdsFuturesRestAPI,
                     break
                 time.sleep(rate_limit)
             except Exception as e:
-                raise f"發生錯誤{e}"
+                logging.error(f"抓取K線時發生錯誤: {e}")
+                raise # 重新拋出原始異常，保留堆疊信息
         print("抓取完成")    
 
         columns = ["open_time", "open", "high", "low", "close", "ignore", "close_time", "ignore","ignore","ignore","ignore","ignore"]
@@ -108,11 +109,14 @@ def to_csv(df, pathdir , filename):
     logging.info(f"已儲存檔案到{pathdir}/")
 
 def result_to_csv(df, is_backtest):
+    # 載入設定檔以獲取檔名所需資訊
+    config = load_config()
     if is_backtest:
         pathdir = "result/backtests"
     else:
         pathdir = "result/logs"
-    filename = f"{df.loc[0,"symbol"]}_{df.loc[0, "strategy_name"]}_{df.loc[0,"open_time"]} to {df.iloc[-1]["open_time"]}"
+    # 從 config 讀取 symbol 和 strategy，從 df 讀取時間
+    filename = f"{config['基本設定']['symbol']}_{config['基本設定']['strategy']}_{df.loc[0,'時間']} to {df.iloc[-1]['時間']}"
     filename = re.sub(":", "-", filename)
     to_csv(df, pathdir, filename)
 
