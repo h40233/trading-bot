@@ -232,3 +232,70 @@ def test_order_mode_percent(mock_config):
     # 預期 base_size = cash * percent / 100 / price = 10000 * 10 / 100 / 100 = 10
     bt._create_order(close=Decimal('100'), direction=1, timestamp='2024-01-01', i=0)
     assert math.isclose(bt.position.size, Decimal('10'))
+
+class TestEdgeCases:
+    """專門測試邊界條件和例外情況"""
+
+    def test_empty_dataframe(self, mock_config):
+        """測試當傳入空的 DataFrame 時，系統是否能正常處理"""
+        bt = backtest(pd.DataFrame(), mock_config)
+        # 期望 run() 能夠正常結束，不拋出任何錯誤
+        try:
+            bt.run()
+        except Exception as e:
+            pytest.fail(f"當傳入空 DataFrame 時，bt.run() 拋出了未預期的錯誤: {e}")
+        # 驗證沒有任何交易發生
+        assert bt.stats.count == 0
+        assert bt.stats.pnl == Decimal('0')
+
+    def test_close_non_existent_position(self, mock_config):
+        """測試對一個不存在的倉位執行平倉時，是否會拋出例外"""
+        pos = position(mock_config)
+        assert pos.size == Decimal('0')
+        # 使用 pytest.raises 來驗證是否拋出了預期的 Exception
+        with pytest.raises(Exception, match="當前無持倉，無法平倉"):
+            pos.close(price=Decimal('100'), size=Decimal('-1'), timestamp='2024-01-01')
+
+    def test_zero_order_value(self, mock_config):
+        """測試當 order_value 為 0 時，是否會阻止開倉並拋出例外"""
+        mock_config["下單設定"]["order_value"] = 0
+        bt = backtest(pd.DataFrame(), mock_config)
+        # 預期在 _create_order -> position.open 中會因為 size 為 0 而拋出 ValueError
+        with pytest.raises(ValueError, match="size不能為0"):
+            bt._create_order(close=Decimal('100'), direction=1, timestamp='2024-01-01', i=0)
+
+    def test_division_by_zero_on_price(self, mock_config):
+        """測試當價格為 0 時，百分比或固定價值開倉是否會拋出例外"""
+        mock_config["下單設定"]["order_mode"] = "percent"
+        bt = backtest(pd.DataFrame(), mock_config)
+        # Decimal 預設會捕捉除以零的錯誤並拋出 InvalidOperation
+        from decimal import DivisionByZero
+        with pytest.raises(DivisionByZero):
+            bt._create_order(close=Decimal('0'), direction=1, timestamp='2024-01-01', i=0)
+
+    def test_no_loss_profit_factor(self, mock_config):
+        """測試在沒有任何虧損的情況下，獲利因子是否為無限大"""
+        stat = stats(mock_config)
+        profit_log = pd.DataFrame([{'狀態': '平倉', '出場量': Decimal('1'), '實現損益': Decimal('100'), '時間': '2024-01-01'}])
+        stat.trade_log(pnl=Decimal('100'), log=profit_log)
+        assert stat.profit_factor() == Decimal('Infinity')
+
+    def test_consecutive_reverse_signals(self, mock_config):
+        """測試連續的反手信號是否能被正確處理"""
+        data = {
+            'close_time': pd.to_datetime(['2024-01-01 01:00', '2024-01-01 02:00']),
+            'close': [100, 105],
+            'signal': [1, -1] 
+        }
+        df = pd.DataFrame(data)
+        bt = backtest(df, mock_config)
+        bt.run()
+
+        # 預期：
+        # 1. K棒i=1，反手操作，平掉多倉。PnL = (105-100) - 105*0.001 = 4.895。count=1。
+        # 2. 反手後，持有空倉。
+        # 3. 回測結束，使用最後價格105，強制平掉空倉。PnL = (105-105) - 105*0.001 = -0.105。count=2。
+        # 總 PnL = 4.895 - 0.105 = 4.79
+        assert bt.stats.count == 2 # 包含反手時的平倉，和期末的平倉
+        assert bt.position.size == Decimal('0') # 最終倉位應為 0
+        assert math.isclose(bt.stats.pnl, Decimal('4.79'))

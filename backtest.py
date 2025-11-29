@@ -108,8 +108,12 @@ class backtest:
             elif row["signal"] == -1:
                 self._create_order(row["close"], -1, row["close_time"], i)
         if self.position.size != 0:
-            pnl, close = self.position.close_all(self.df.iloc[-1]["close"], self.df.iloc[-1]["close_time"])
-            self.stats.trade_log(pnl, close)
+            # 確保傳入的價格是 Decimal
+            last_price = Decimal(str(self.df.iloc[-1]["close"]))
+            close_results = self.position.close_all(last_price, self.df.iloc[-1]["close_time"])
+            if close_results:
+                pnl, log = close_results[0]
+                self.stats.trade_log(pnl, log)
         logging.info(f"總交易次數: {self.stats.count}, 總損益: {self.stats.pnl}, 最大回撤: {self.stats.max_drawdown}, 最終資金: {self.stats.cash}")
         # 只有在 log 不是空的情況下才儲存結果
         if not self.stats.log.empty:
@@ -382,8 +386,8 @@ class stats:
             return Decimal('0.0')
 
         returns = self.log["實現損益"].dropna()
-        total_profit = sum(r for r in returns if r > Decimal('0'))
-        total_loss = sum(r for r in returns if r < Decimal('0')).copy_abs()
+        total_profit = sum((r for r in returns if r > Decimal('0')), Decimal('0'))
+        total_loss = sum((r for r in returns if r < Decimal('0')), Decimal('0')).copy_abs()
 
         if total_loss == Decimal('0'):
             return Decimal('Infinity') # 如果沒有虧損，獲利因子為無限大
