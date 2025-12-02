@@ -3,6 +3,7 @@ https://github.com/h40233/trading-bot.git
 專案
 |-- main.py 實盤執行的主程式
 |-- backtest.py 用來回測的程式
+|-- data_loader.py 用來抓取K線資料的程式
 |-- config.json 用來存放策略需要的參數
 |-- .env 用來存放API KEY、SECRET、TG ID等帶隱私的參數
 |-- .env.sample 
@@ -26,3 +27,4 @@ https://github.com/h40233/trading-bot.git
 2025.09.16 可以抓取K線資料
 2025.09.20 可以動態載入策略，並將帶有signal的df存成csv
 2025.11.30 新增一份規格文件，並有對應的單元測試
+2025.12.02 新增UI介面與新增data_loader

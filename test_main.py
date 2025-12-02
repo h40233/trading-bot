@@ -59,7 +59,7 @@ def test_main_flow(mock_load_config, mock_load_strategy, mock_get_kline_data, mo
     """測試 main.py 的主要執行流程"""
     # 在測試函式內部匯入 main 模組。
     # 這是為了確保我們是在 patch 設定好之後才載入模組，或者是為了避免循環匯入的問題。
-    import main as main_module
+    import data_loader as main_module
 
     # --- 準備 (Arrange) ---
     # 設定 Mock 物件的行為與回傳值。
