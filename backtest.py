@@ -3,10 +3,6 @@
 # 這個檔案是「回測引擎 (Backtesting Engine)」。
 # 它的功能是模擬真實的市場環境，逐行讀取 K 線資料，執行策略信號，並計算損益。
 # 它是完全獨立的，不連接交易所，只在本地運算。
-# 核心組件包含：
-# 1. backtest (類別): 總指揮，負責跑迴圈、調度資金、下單。
-# 2. position (類別): 倉位管家，負責計算持倉均價、開平倉邏輯、計算手續費。
-# 3. stats (類別): 會計師，負責記錄每一筆交易、繪製資金曲線、計算夏普比率等績效指標。
 # -----------------------------------------------------------------------------------------
 
 # [Import 說明]
@@ -95,37 +91,28 @@ class backtest:
         """繪製並儲存資金曲線圖"""
         self.stats.plot_equity_curve()
 
-    # [Function 說明]
-    # 功能：執行回測的主迴圈。
-    # 修改：新增 progress_callback 參數，用於更新前端進度條
     def run(self, progress_callback=None):
         # 取得資料總長度
         total_len = len(self.df)
         
         # 使用 tqdm 建立進度條 (這是給終端機看的)
-        # 我們同時保留 tqdm 和 Streamlit 的進度更新
         for i in tqdm(range(total_len)):
             
-            # --- 新增的部分: 更新 Streamlit 進度條 ---
+            # --- 更新 Streamlit 進度條 ---
             if progress_callback:
-                # 為了避免更新太頻繁導致網頁卡頓，我們可以每 1% 或每 N 筆更新一次
-                # 這裡設定每 1% 更新一次
                 if i % (total_len // 100 + 1) == 0:
-                    # 計算目前的進度 (0.0 ~ 1.0)
                     progress = i / total_len
                     progress_callback(progress)
             # -------------------------------------
 
-            # 檢查破產保護：如果現金小於等於 0，停止回測。
+            # 檢查破產保護
             if self.stats.cash <= 0:
                 logging.info("資金不足，無法繼續交易")
                 break
             
-            # 取出當前這根 K 線的資料。
             row = self.df.iloc[i].copy() 
             row['close'] = Decimal(str(row['close'])) 
             
-            # 如果目前有持倉 (size != 0)，需要檢查出場條件。
             if self.position.size != 0:
                 # 1. 檢查是否觸發止損 (SL)。
                 logs_sl = self.position.trigger_SL(row["close"], row["close_time"])
@@ -152,7 +139,7 @@ class backtest:
             elif row["signal"] == -1:
                 self._create_order(row["close"], -1, row["close_time"], i)
         
-        # 迴圈結束後 (所有 K 線跑完)。
+        # 迴圈結束後平倉
         if self.position.size != 0:
             last_price = Decimal(str(self.df.iloc[-1]["close"]))
             close_results = self.position.close_all(last_price, self.df.iloc[-1]["close_time"])
@@ -160,7 +147,6 @@ class backtest:
                 pnl, log = close_results[0]
                 self.stats.trade_log(pnl, log)
         
-        # 確保進度條最後會跑到 100%
         if progress_callback:
             progress_callback(1.0)
         
@@ -299,7 +285,10 @@ class stats:
 
             if "狀態" in log.columns and log["狀態"].iloc[0] == "開倉":
                 opening_fee = log["進場量"].iloc[0].copy_abs() * log["進場價"].iloc[0] * Decimal(str(self.config["回測設定"]["fee_rate"]))
+                
+                # [修改點] 同時扣除現金與損益
                 self.cash -= opening_fee
+                self.pnl -= opening_fee  # <--- 新增這行
 
             elif "狀態" in log.columns and log["狀態"].iloc[0] == "平倉":
                 if pnl is None or pnl == Decimal('0'):
@@ -313,8 +302,7 @@ class stats:
 
                 closed_size = log["出場量"].iloc[0]
                 self.count += Decimal('1')
-                # 這裡的邏輯：平倉數量 closed_size > 0 代表買入平倉(原空單)，< 0 代表賣出平倉(原多單)
-                # 原始邏輯判斷:
+                
                 if closed_size < Decimal('0'): # 賣出平倉 (原本是多單)
                     self.count_long += Decimal('1')
                     if pnl > Decimal('0'): self.count_long_win += Decimal('1')
@@ -325,18 +313,16 @@ class stats:
     def sharpe(self):
         log_df = self.log.copy()
         if "實現損益" not in log_df.columns or log_df["實現損益"].isnull().all():
-            return 0.0 # Return float
+            return 0.0 
 
         log_df['時間'] = pd.to_datetime(log_df['時間'])
         log_df.set_index('時間', inplace=True)
 
-        # 轉成 float 進行 numpy 運算 (因為 numpy 對 Decimal 支援度有限且慢)
         daily_returns = log_df['實現損益'].astype(float).resample('D').sum()
 
         if len(daily_returns) < 2:
             return 0.0
 
-        # 將 rf 設為 float
         rf = 0.01 
         mean_daily_return = daily_returns.mean()
         std_daily_return = daily_returns.std()
@@ -358,17 +344,16 @@ class stats:
         pnl_events = log_df.dropna(subset=['實現損益'])
         pnl_events = pnl_events.sort_values(by='時間')
         
-        # 這裡因為繪圖需要，轉成 float
         pnl_events['累計損益'] = pnl_events['實現損益'].apply(float).cumsum()
         
         initial_cash_float = float(self.config["回測設定"]["initial_cash"])
-        current_pnl_float = float(self.pnl)
-        current_cash_float = float(self.cash)
         
-        # 資金曲線 = (當前現金 - 當前總損益) + 累計損益 (還原歷史軌跡)
-        # 也就是：初始本金(扣除已實現手續費) + 累計損益
-        # 但為了簡單呈現，我們用：初始本金 + 累計損益 (忽略開倉手續費的時序影響，僅看平倉結果)
-        # 或者更精確：pnl_events['資金曲線'] = initial_cash_float + pnl_events['累計損益']
+        # [修改點] 因為 self.pnl 已經扣過開倉手續費了，但這裡是用平倉紀錄累加的，
+        # 如果要非常精確的曲線，理論上開倉當下資金也會掉一點點。
+        # 但為了繪圖簡單，這裡邏輯維持：初始資金 + 累計已實現損益
+        # 注意：這裡畫出來的圖，最終點可能會比 self.cash 稍微多一點點 (因為還沒扣最後一次開倉費? 不對，這裡只有平倉紀錄)
+        # 其實最準確的做法是把開倉紀錄也畫進去，但那樣圖會變得很密。
+        # 目前這樣畫是可以接受的近似值。
         pnl_events['資金曲線'] = initial_cash_float + pnl_events['累計損益']
 
         return pnl_events[['時間', '資金曲線']]
@@ -433,7 +418,7 @@ class stats:
         if len(daily_returns) < 2:
             return 0.0
 
-        rf = 0.01 # float
+        rf = 0.01 
         mean_daily_return = daily_returns.mean()
         
         negative_returns = daily_returns[daily_returns < 0]

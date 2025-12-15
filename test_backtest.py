@@ -219,23 +219,23 @@ class TestStats:
         stat = stats(mock_config)
         
         # 模擬一筆獲利的多單交易 (PnL=100)。
-        profit_log = pd.DataFrame([{'狀態': '平倉', '出場量': Decimal('1'), '實現損益': Decimal('100'), '時間': '2024-01-01'}])
+        profit_log = pd.DataFrame([{'狀態': '平倉', '出場量': Decimal('-1'), '實現損益': Decimal('100'), '時間': '2024-01-01'}])
         stat.trade_log(pnl=Decimal('100'), log=profit_log)
         
         # 模擬一筆虧損的空單交易 (PnL=-50)。
-        loss_log = pd.DataFrame([{'狀態': '平倉', '出場量': Decimal('-1'), '實現損益': Decimal('-50'), '時間': '2024-01-02'}])
+        loss_log = pd.DataFrame([{'狀態': '平倉', '出場量': Decimal('1'), '實現損益': Decimal('-50'), '時間': '2024-01-02'}])
         stat.trade_log(pnl=Decimal('-50'), log=loss_log)
         
         # 驗證總交易次數為 2。
-        assert stat.count == 2
+        assert stat.count == Decimal('2')
         # 驗證多單次數為 1。
-        assert stat.count_long == 1
+        assert stat.count_long == Decimal('1')
         # 驗證多單勝場數為 1。
-        assert stat.count_long_win == 1
+        assert stat.count_long_win == Decimal('1')
         # 驗證空單次數為 1。
-        assert stat.count_short == 1
+        assert stat.count_short == Decimal('1')
         # 驗證空單勝場數為 0。
-        assert stat.count_short_win == 0
+        assert stat.count_short_win == Decimal('0')
         # 驗證總損益 = 100 - 50 = 50。
         assert math.isclose(stat.pnl, Decimal('50'))
         # 驗證最終現金 = 10000 (初始) + 50 = 10050。
@@ -284,7 +284,7 @@ def test_backtest_run_integration(mock_plt_show, mock_result_to_csv, mock_config
 
     # --- 驗證最終結果 ---
     # 手動計算預期結果：
-    # 交易1 (止盈): 100買，110賣。PnL = 10 - 0.11 = 9.89。
+    # 交易1 (止盈): 100買，110賣。PnL = 10 - 0.1 - 0.11 = 9.79。
     # 交易2 (反手止損): 100買，95賣(觸發止損)。但這裡要注意，sample_df 裡第三個點是 signal -1 (反手)。
     # 讓我們看 sample_df:
     # 01:00 close 100, signal 1 -> 開多。
@@ -300,12 +300,12 @@ def test_backtest_run_integration(mock_plt_show, mock_result_to_csv, mock_config
     # sample_df 最後價格是 105，確實超過 99.75。所以會觸發止損。
     
     # 計算 PnL:
-    # 交易1 (多單止盈): 9.89 (如上計算)
+    # 交易1 (多單止盈): 9.79 (如上計算)
     # 交易2 (空單止損): 開倉95，止損價99.75。虧損 = (95 - 99.75) = -4.75。
     # 手續費 (開倉95 + 平倉99.75) * 0.001 = (194.75) * 0.001 = 0.19475 (這裡測試代碼邏輯似乎把開倉費算在別的地方，只算平倉費 0.09975)。
     # 總之，我們相信 assert 的數值，驗證程式邏輯與預期一致。
     assert bt.stats.count == 2
-    assert math.isclose(bt.stats.pnl, Decimal('5.04025'))
+    assert math.isclose(bt.stats.pnl, Decimal('4.84525'))
     assert math.isclose(bt.stats.cash, Decimal('10004.84525'))
 
     # 驗證 mock 函式被呼叫。
@@ -361,8 +361,8 @@ def test_force_close_by_max_hold(mock_config):
     # 驗證：最終空倉。
     assert bt.position.size == 0
     # 驗證損益：在 index=2 (價格110) 平倉。
-    # PnL = (110 - 100) - 手續費 = 9.89。
-    assert math.isclose(bt.stats.pnl, Decimal('9.89'))
+    # PnL = (110 - 100) - 手續費 = 9.79。
+    assert math.isclose(bt.stats.pnl, Decimal('9.79'))
 
 # [Function 說明]
 # 功能：測試槓桿 (Leverage) 功能。
@@ -484,4 +484,4 @@ class TestEdgeCases:
         # 驗證最終無持倉。
         assert bt.position.size == Decimal('0')
         # 驗證總損益正確性。
-        assert math.isclose(bt.stats.pnl, Decimal('4.79'))
+        assert math.isclose(bt.stats.pnl, Decimal('4.585'))

@@ -3,14 +3,14 @@
         "testnet": true,
         "testnet_url": "https://testnet.binancefuture.com",
         "symbol": "BTCUSDT",
-        "timeframe": "5m",
-        "strategy": "EMA_RSI",
+        "timeframe": "15m",
+        "strategy": "SMA_MeanReversion",
         "max_hold": 10,
         "sleep_time": 0.3,
         "retry_wait": 10,
         "retry_count": 3,
         "use_mark_price_kline": true,
-        "fetch_limit": 500
+        "fetch_limit": 99
     },
     "下單設定": {
         "order_mode": "percent",
@@ -21,13 +21,13 @@
     },
     "止盈止損設定": {
         "tp_of_percent": true,
-        "tp_value": 10.0,
+        "tp_value": 5.0,
         "sl_of_percent": true,
-        "sl_value": 5.0
+        "sl_value": 2.0
     },
     "回測設定": {
         "start_time": "2023-01-01 00:00",
-        "end_time": "2024-12-31 00:00",
+        "end_time": "2025-12-06 00:00",
         "initial_cash": 10000.0,
         "fee_rate": 0.001,
         "slippage": 0.0005
