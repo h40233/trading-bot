@@ -3,15 +3,14 @@ import json
 import pandas as pd
 import os
 import glob
-import plotly.express as px
-import itertools
 import inspect
 from decimal import Decimal
 
 # 引入你的專案模組
 from util import load_config, to_timestamp, data_to_csv, load_strategy
 from backtest import backtest
-from data_loader import fetch_and_process_data 
+from data_loader import fetch_and_process_data
+from optimizer import Optimizer
 # 引入策略註冊表
 from strategies import STRATEGY_REGISTRY
 
@@ -53,13 +52,12 @@ with st.sidebar.form("config_form"):
         strat_index = strategy_options.index(current_strat) if current_strat in strategy_options else 0
         strategy_name = st.selectbox("選擇策略", strategy_options, index=strat_index)
         
-        # [修正] 補回 checkbox，這樣介面上才會出現勾選框
         col_b3, col_b4 = st.columns(2)
         testnet = col_b3.checkbox("使用測試網 (Testnet)", value=base_conf.get("testnet", True))
         use_mark = col_b4.checkbox("使用標記價格 K線", value=base_conf.get("use_mark_price_kline", False))
         
         col_b5, col_b6 = st.columns(2)
-        max_hold = col_b5.number_input("最大持倉 K 棒數 (0為不限)", value=int(base_conf.get("max_hold", 10)))
+        max_hold = col_b5.number_input("最大持倉 K 棒數 (0為不限)", value=int(base_conf.get("max_hold", 0) or 0))
         fetch_limit = col_b6.number_input("單次抓取 K 線數量", value=int(base_conf.get("fetch_limit", 1000)))
         
         sleep_time = st.number_input("API 冷卻秒數", value=float(base_conf.get("sleep_time", 0.5)))
@@ -72,7 +70,6 @@ with st.sidebar.form("config_form"):
         order_value = col_o2.number_input("下單數值", value=float(order_conf.get("order_value", 10)))
         leverage = st.number_input("槓桿倍數", value=int(order_conf.get("leverage", 1)))
         
-        # [修正] 把這兩行補回來，介面才會顯示勾選框
         col_o3, col_o4 = st.columns(2)
         pyramiding = col_o3.checkbox("允許加倉 (Pyramiding)", value=order_conf.get("pyramiding", False))
         reverse = col_o4.checkbox("允許反手 (Reverse)", value=order_conf.get("reverse", False))
@@ -99,8 +96,8 @@ with st.sidebar.form("config_form"):
     submitted = st.form_submit_button("💾 儲存並更新設定")
     
     if submitted:
-        config["基本設定"].update({"symbol": symbol, "timeframe": timeframe, "strategy": strategy_name, "max_hold": max_hold if max_hold > 0 else None})
-        config["下單設定"].update({"order_mode": order_mode, "order_value": order_value, "leverage": leverage})
+        config["基本設定"].update({"symbol": symbol, "timeframe": timeframe, "strategy": strategy_name, "testnet": testnet, "use_mark_price_kline": use_mark, "max_hold": max_hold if max_hold > 0 else None, "fetch_limit": fetch_limit, "sleep_time": sleep_time})
+        config["下單設定"].update({"order_mode": order_mode, "order_value": order_value, "leverage": leverage, "pyramiding": pyramiding, "reverse": reverse})
         config["止盈止損設定"].update({"tp_of_percent": tp_percent, "tp_value": tp_value, "sl_of_percent": sl_percent, "sl_value": sl_value})
         config["回測設定"].update({"start_time": start_time_str, "end_time": end_time_str, "initial_cash": initial_cash, "fee_rate": fee_rate, "slippage": slippage})
         
@@ -148,8 +145,18 @@ with tab1:
                 st.subheader("資金曲線")
                 equity = bt.stats.get_equity_curve()
                 if equity is not None:
-                    st.line_chart(equity, x="時間", y="資金曲線", color="#00FF00")
-                
+                    st.line_chart(equity.set_index("時間")['資金曲線'], color="#00FF00", use_container_width=True)
+
+                    st.subheader("水下圖 (Drawdown)")
+                    st.area_chart(equity.set_index("時間")['回撤'], color="#FF0000", use_container_width=True)
+
+                    st.subheader("週期性報酬")
+                    period = st.selectbox("選擇週期", ["月", "季", "年"], index=0)
+                    period_map = {"月": "M", "季": "Q", "年": "A"}
+                    periodic_returns = bt.stats.get_periodic_returns(period=period_map[period])
+                    if periodic_returns is not None:
+                        st.bar_chart(periodic_returns.set_index("時間")['損益'], use_container_width=True)
+
                 with st.expander("查看詳細交易日誌"):
                     st.dataframe(bt.stats.log, use_container_width=True)
             else:
@@ -164,11 +171,9 @@ with tab2:
     st.header("🧪 參數優化與穩健性分析")
     st.markdown("此功能自動偵測策略參數，並使用網格搜索 (Grid Search) 尋找參數高原。")
     
-    # --- 動態參數偵測邏輯 ---
     if strategy_name in STRATEGY_REGISTRY:
         StrategyClass = STRATEGY_REGISTRY[strategy_name]
         
-        # 使用 inspect 取得 __init__ 參數
         sig = inspect.signature(StrategyClass.__init__)
         all_params = [
             p.name for p in sig.parameters.values() 
@@ -180,51 +185,42 @@ with tab2:
         with st.container(border=True):
             st.subheader("1. 設定優化範圍")
             
-            if len(all_params) < 2:
-                st.warning(f"此策略只有 {len(all_params)} 個數值參數，無法進行 2D 熱力圖分析 (至少需要 2 個)。")
+            if not all_params:
+                st.warning("此策略沒有可供優化的數值參數。")
                 selected_params = []
             else:
-                st.info(f"偵測到可優化參數：{all_params}")
-                selected_params = st.multiselect("請選擇 2 個參數進行優化 (X軸 與 Y軸)", all_params, max_selections=2)
+                st.info(f"偵測到可優化參數：`{all_params}`")
+                selected_params = st.multiselect(
+                    "請選擇要優化的參數 (可選多個)", 
+                    all_params, 
+                    default=all_params[:2] if len(all_params) >= 2 else all_params
+                )
             
             param_settings = {}
-            
-            if len(selected_params) == 2:
-                col_p1, col_p2, col_split = st.columns(3)
-                
-                # 參數 1 (X軸)
-                p1_name = selected_params[0]
-                with col_p1:
-                    st.markdown(f"**{p1_name} (X軸)**")
-                    default_val = sig.parameters[p1_name].default
-                    p1_start = st.number_input(f"{p1_name} 開始", value=float(default_val), key="p1_start")
-                    p1_end = st.number_input(f"{p1_name} 結束", value=float(default_val*2), key="p1_end")
-                    p1_step = st.number_input(f"{p1_name} 間隔", value=float(5), key="p1_step")
-                    param_settings[p1_name] = (p1_start, p1_end, p1_step)
+            if selected_params:
+                cols = st.columns(len(selected_params) + 1)
+                for i, param_name in enumerate(selected_params):
+                    with cols[i]:
+                        st.markdown(f"**{param_name}**")
+                        default_val = sig.parameters[param_name].default
+                        is_int = isinstance(default_val, int)
+                        step_val = 1.0 if is_int else 0.1
+                        
+                        p_start = st.number_input(f"{param_name} 開始", value=float(default_val), key=f"p_start_{param_name}")
+                        p_end = st.number_input(f"{param_name} 結束", value=float(default_val * 2), key=f"p_end_{param_name}")
+                        p_step = st.number_input(f"{param_name} 間隔", value=step_val, min_value=0.0001, format="%.4f", key=f"p_step_{param_name}")
+                        param_settings[param_name] = (p_start, p_end, p_step)
 
-                # 參數 2 (Y軸)
-                p2_name = selected_params[1]
-                with col_p2:
-                    st.markdown(f"**{p2_name} (Y軸)**")
-                    default_val_2 = sig.parameters[p2_name].default
-                    p2_start = st.number_input(f"{p2_name} 開始", value=float(max(1, default_val_2-5)), key="p2_start")
-                    p2_end = st.number_input(f"{p2_name} 結束", value=float(default_val_2+10), key="p2_end")
-                    p2_step = st.number_input(f"{p2_name} 間隔", value=float(2), key="p2_step")
-                    param_settings[p2_name] = (p2_start, p2_end, p2_step)
-                
-                with col_split:
-                    st.markdown("**資料分割設定**")
-                    split_ratio = st.slider("訓練集佔比 (In-Sample %)", 0.1, 0.9, 0.7, 0.05)
+                with cols[-1]:
+                    st.markdown("**資料分割**")
+                    split_ratio = st.slider("訓練集佔比 (In-Sample %)", 0.1, 0.9, 0.7, 0.05, key="split_ratio")
 
-        # 執行按鈕
         if st.button("🧪 開始網格搜索", type="primary", use_container_width=True):
-            if len(selected_params) != 2:
-                st.error("請先選擇兩個參數！")
+            if not selected_params:
+                st.error("請至少選擇一個要優化的參數！")
             else:
-                # --- UI 元件準備 (使用 st.empty 佔位) ---
-                status_header = st.empty()  # 用來顯示「第幾組 / 總共幾組」
-                param_display = st.empty()  # [修改點] 用來顯示「當前參數」，這格會一直被覆蓋，不會變長
-                current_bar = st.progress(0) # 單次進度條
+                status_header = st.empty()
+                progress_bar = st.progress(0)
                 
                 status_header.text("正在獲取並清洗原始資料...")
                 full_df = fetch_and_process_data(custom_config=config)
@@ -233,103 +229,49 @@ with tab2:
                     base_columns = ['open_time', 'open', 'high', 'low', 'close', 'close_time', 'symbol']
                     raw_df = full_df[base_columns].copy()
                     
-                    # 生成參數範圍
-                    def make_range(start, end, step):
-                        vals = []
-                        curr = start
-                        while curr <= end:
-                            vals.append(int(curr) if step % 1 == 0 else curr)
-                            curr += step
-                        return vals
+                    opt = Optimizer(config, StrategyClass, raw_df)
+                    
+                    def update_ui_progress(p, text):
+                        progress_bar.progress(p, text=text)
 
-                    range1 = make_range(*param_settings[selected_params[0]])
-                    range2 = make_range(*param_settings[selected_params[1]])
+                    res_df = opt.run(selected_params, param_settings, split_ratio, progress_callback=update_ui_progress)
                     
-                    param_combinations = list(itertools.product(range1, range2))
-                    total_combs = len(param_combinations)
+                    status_header.success(f"✅ 已完成全部參數測試")
                     
-                    results = []
-                    split_idx = int(len(raw_df) * split_ratio)
-                    
-                    # callback
-                    def update_realtime_bar(p):
-                        current_bar.progress(p, text=f"當前模擬進度: {int(p*100)}%")
-
-                    # 開始迴圈
-                    for i, (val1, val2) in enumerate(param_combinations):
-                        
-                        # 更新進度文字
-                        status_header.markdown(f"### 🔄 正在執行第 {i + 1} / {total_combs} 組參數組合")
-                        
-                        # [修改點] 使用 info 或 text 更新同一個區塊，而不是一直 append
-                        param_display.info(f"👉 正在測試參數： **{selected_params[0]}={val1}**, **{selected_params[1]}={val2}**")
-                        
-                        try:
-                            init_params = {}
-                            init_params[selected_params[0]] = val1
-                            init_params[selected_params[1]] = val2
-                            
-                            strategy_instance = StrategyClass(**init_params)
-                            
-                            # 計算訊號
-                            temp_df = raw_df.copy()
-                            df_with_signal = strategy_instance.generate_signal(temp_df)
-                            
-                            # 切割
-                            df_train = df_with_signal.iloc[:split_idx]
-                            df_test = df_with_signal.iloc[split_idx:]
-                            
-                            # 跑回測
-                            bt_train = backtest(df_train, config)
-                            bt_train.run(progress_callback=update_realtime_bar)
-                            
-                            bt_test = backtest(df_test, config)
-                            bt_test.run(progress_callback=update_realtime_bar)
-                            
-                            results.append({
-                                selected_params[0]: val1,
-                                selected_params[1]: val2,
-                                "IS_Sharpe": bt_train.stats.sharpe(),
-                                "OS_Sharpe": bt_test.stats.sharpe(),
-                            })
-                            
-                        except Exception as e:
-                            print(f"優化失敗: {e}")
-                    
-                    # 完成後處理
-                    current_bar.progress(1.0, text="優化全數完成！")
-                    status_header.success(f"✅ 已完成全部 {total_combs} 組參數測試")
-                    param_display.empty() # 清掉參數顯示，讓畫面乾淨一點
-                    
-                    if results:
-                        res_df = pd.DataFrame(results)
-                        
+                    if not res_df.empty:
                         st.divider()
-                        v1, v2 = st.columns(2)
+                        st.subheader("📊 優化結果視覺化")
+
+                        num_dims = len(selected_params)
                         
-                        x_axis = selected_params[0]
-                        y_axis = selected_params[1]
-                        
-                        with v1:
-                            st.subheader("🔥 訓練集 (In-Sample)")
-                            fig1 = px.density_heatmap(
-                                res_df, x=x_axis, y=y_axis, z="IS_Sharpe", 
-                                text_auto=".2f", color_continuous_scale="RdBu",
-                                title="Sharpe Ratio (Train)"
-                            )
-                            st.plotly_chart(fig1, use_container_width=True)
-                        
-                        with v2:
-                            st.subheader("❄️ 測試集 (Out-Sample)")
-                            fig2 = px.density_heatmap(
-                                res_df, x=x_axis, y=y_axis, z="OS_Sharpe", 
-                                text_auto=".2f", color_continuous_scale="RdBu",
-                                title="Sharpe Ratio (Test)"
-                            )
-                            st.plotly_chart(fig2, use_container_width=True)
-                        
+                        if num_dims == 1:
+                            st.markdown("#### 一維參數掃描結果")
+                            p_name = selected_params[0]
+                            fig = opt.plot_1d_results(res_df, p_name)
+                            st.plotly_chart(fig, use_container_width=True)
+
+                        elif num_dims == 2:
+                            st.markdown("#### 二維參數熱力圖")
+                            v1, v2 = st.columns(2)
+                            with v1:
+                                st.subheader("🔥 訓練集 (In-Sample)")
+                                fig1 = opt.plot_2d_heatmap(res_df, selected_params, metric="IS_Sharpe", title_prefix="Sharpe Ratio (Train)")
+                                st.plotly_chart(fig1, use_container_width=True)
+                            with v2:
+                                st.subheader("❄️ 測試集 (Out-Sample)")
+                                fig2 = opt.plot_2d_heatmap(res_df, selected_params, metric="OS_Sharpe", title_prefix="Sharpe Ratio (Test)")
+                                st.plotly_chart(fig2, use_container_width=True)
+
+                        else: 
+                            st.markdown("#### 多維平行座標圖")
+                            st.info("下圖中，每一條線代表一組參數組合。您可以拖動座標軸來篩選範圍，觀察在高 Sharpe 值時，參數大致落在哪個區間。")
+                            fig = opt.plot_parallel_coords(res_df, selected_params)
+                            st.plotly_chart(fig, use_container_width=True)
+
                         st.subheader("詳細數據")
                         st.dataframe(res_df, use_container_width=True)
+                else:
+                    status_header.error("資料獲取失敗，無法進行優化。")
     else:
         st.error(f"找不到策略 {strategy_name}")
 

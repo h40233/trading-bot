@@ -4,7 +4,7 @@
         "testnet_url": "https://testnet.binancefuture.com",
         "symbol": "BTCUSDT",
         "timeframe": "15m",
-        "strategy": "SMA_MeanReversion",
+        "strategy": "RSI_Bollinger",
         "max_hold": 10,
         "sleep_time": 0.3,
         "retry_wait": 10,
@@ -15,8 +15,8 @@
     "下單設定": {
         "order_mode": "percent",
         "order_value": 10.0,
-        "pyramiding": true,
-        "reverse": true,
+        "pyramiding": false,
+        "reverse": false,
         "leverage": 10
     },
     "止盈止損設定": {
