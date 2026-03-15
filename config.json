@@ -1,10 +1,10 @@
 {
     "基本設定": {
-        "testnet": true,
+        "testnet": false,
         "testnet_url": "https://testnet.binancefuture.com",
         "symbol": "BTCUSDT",
         "timeframe": "15m",
-        "strategy": "RSI_Bollinger",
+        "strategy": "ThreeEMA_MACD",
         "max_hold": 10,
         "sleep_time": 0.3,
         "retry_wait": 10,
@@ -26,8 +26,8 @@
         "sl_value": 2.0
     },
     "回測設定": {
-        "start_time": "2023-01-01 00:00",
-        "end_time": "2025-12-06 00:00",
+        "start_time": "2026-03-01 00:00",
+        "end_time": "2026-03-16 00:00",
         "initial_cash": 10000.0,
         "fee_rate": 0.001,
         "slippage": 0.0005

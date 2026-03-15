@@ -82,3 +82,30 @@ pytest
 # 這是 pytest 的擴充套件。
 # 用途：提供 `mock` 功能，讓我們在測試時可以「模擬」交易所的回傳資料，而不用真的去連線 (這對測試非常重要)。
 pytest-mock
+
+# --- 核心數據處理與數值運算 ---
+# [套件說明] pandas
+# 用途：整個專案大量使用 DataFrame 來處理 K 線與回測結果，例如 `backtest.py`、`optimizer.py`、`app.py` 等檔案。
+pandas
+
+# [套件說明] numpy
+# 用途：搭配 pandas 做數值運算，在回測與測試 (`backtest.py`, `test_backtest.py`) 中都有使用。
+numpy
+
+# --- 進階視覺化與網頁介面 ---
+# [套件說明] plotly
+# 用途：在 `optimizer.py` 中使用 `plotly.express` 產生互動式圖表，用於觀察參數搜尋與績效表現。
+plotly
+
+# [套件說明] streamlit
+# 用途：`app.py` 使用 Streamlit 建立網頁介面，讓使用者可以透過瀏覽器操作回測與策略設定。
+streamlit
+
+# --- 工具類補充 ---
+# [套件說明] tqdm
+# 用途：在 `backtest.py` 使用進度條顯示長時間回測過程的進度，提升使用體驗。
+tqdm
+
+# [套件說明] func-timeout
+# 用途：在 `util.py` 中使用 `func_timeout` 與 `FunctionTimedOut` 來限制某些函式執行時間，避免長時間卡住。
+func-timeout
